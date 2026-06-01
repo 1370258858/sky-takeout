@@ -1,0 +1,214 @@
+
+services:
+  mysql:
+    image: mysql:5.7
+    container_name: sky-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-sky_takeout}
+      MYSQL_USER: ${MYSQL_USER:-sky}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-sky}
+    command: ["--default-authentication-plugin=mysql_native_password"]
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: sky-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: sky-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${MQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${MQ_DEFAULT_PASS:-guest}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ./rabbitmq_data:/var/lib/rabbitmq
+
+  gateway-service:
+    build:
+      context: .
+      dockerfile: ./gatewayService/Dockerfile
+    container_name: sky-gateway-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    environment:
+      GATEWAY_SERVICE_MYSQL_DSN: ${GATEWAY_SERVICE_MYSQL_DSN}
+      GATEWAY_SERVICE_REDIS_ADDR: ${GATEWAY_SERVICE_REDIS_ADDR}
+      GATEWAY_SERVICE_REDIS_PASSWORD: ${GATEWAY_SERVICE_REDIS_PASSWORD}
+      GATEWAY_SERVICE_REDIS_DB: ${GATEWAY_SERVICE_REDIS_DB}
+      GATEWAY_SERVICE_MQ_URL: ${GATEWAY_SERVICE_MQ_URL}
+    ports:
+      - "18080:18080"
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: ./adminService/Dockerfile
+    container_name: sky-admin-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    environment:
+      ADMIN_SERVICE_MYSQL_DSN: ${ADMIN_SERVICE_MYSQL_DSN}
+      ADMIN_SERVICE_REDIS_ADDR: ${ADMIN_SERVICE_REDIS_ADDR}
+      ADMIN_SERVICE_REDIS_PASSWORD: ${ADMIN_SERVICE_REDIS_PASSWORD}
+      ADMIN_SERVICE_REDIS_DB: ${ADMIN_SERVICE_REDIS_DB}
+      ADMIN_SERVICE_MQ_URL: ${ADMIN_SERVICE_MQ_URL}
+    ports:
+      - "18081:18081"
+
+  user-service:
+    build:
+      context: .
+      dockerfile: ./userService/Dockerfile
+    container_name: sky-user-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    environment:
+      USER_SERVICE_MYSQL_DSN: ${USER_SERVICE_MYSQL_DSN}
+      USER_SERVICE_REDIS_ADDR: ${USER_SERVICE_REDIS_ADDR}
+      USER_SERVICE_REDIS_PASSWORD: ${USER_SERVICE_REDIS_PASSWORD}
+      USER_SERVICE_REDIS_DB: ${USER_SERVICE_REDIS_DB}
+      USER_SERVICE_MQ_URL: ${USER_SERVICE_MQ_URL}
+    ports:
+      - "18082:18082"
+
+  goods-service:
+    build:
+      context: .
+      dockerfile: ./goodsService/Dockerfile
+    container_name: sky-goods-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    environment:
+      GOODS_SERVICE_MYSQL_DSN: ${GOODS_SERVICE_MYSQL_DSN}
+      GOODS_SERVICE_REDIS_ADDR: ${GOODS_SERVICE_REDIS_ADDR}
+      GOODS_SERVICE_REDIS_PASSWORD: ${GOODS_SERVICE_REDIS_PASSWORD}
+      GOODS_SERVICE_REDIS_DB: ${GOODS_SERVICE_REDIS_DB}
+      GOODS_SERVICE_MQ_URL: ${GOODS_SERVICE_MQ_URL}
+    ports:
+      - "18083:18083"
+
+  order-service:
+    build:
+      context: .
+      dockerfile: ./orderService/Dockerfile
+    container_name: sky-order-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    environment:
+      ORDER_SERVICE_MYSQL_DSN: ${ORDER_SERVICE_MYSQL_DSN}
+      ORDER_SERVICE_REDIS_ADDR: ${ORDER_SERVICE_REDIS_ADDR}
+      ORDER_SERVICE_REDIS_PASSWORD: ${ORDER_SERVICE_REDIS_PASSWORD}
+      ORDER_SERVICE_REDIS_DB: ${ORDER_SERVICE_REDIS_DB}
+      ORDER_SERVICE_MQ_URL: ${ORDER_SERVICE_MQ_URL}
+    ports:
+      - "18084:18084"
+
+  delivery-service:
+    build:
+      context: .
+      dockerfile: ./deliveryService/Dockerfile
+    container_name: sky-delivery-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    environment:
+      DELIVERY_SERVICE_MYSQL_DSN: ${DELIVERY_SERVICE_MYSQL_DSN}
+      DELIVERY_SERVICE_REDIS_ADDR: ${DELIVERY_SERVICE_REDIS_ADDR}
+      DELIVERY_SERVICE_REDIS_PASSWORD: ${DELIVERY_SERVICE_REDIS_PASSWORD}
+      DELIVERY_SERVICE_REDIS_DB: ${DELIVERY_SERVICE_REDIS_DB}
+      DELIVERY_SERVICE_MQ_URL: ${DELIVERY_SERVICE_MQ_URL}
+    ports:
+      - "18085:18085"
+
+  file-service:
+    build:
+      context: .
+      dockerfile: ./fileService/Dockerfile
+    container_name: sky-file-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    environment:
+      FILE_SERVICE_MYSQL_DSN: ${FILE_SERVICE_MYSQL_DSN}
+      FILE_SERVICE_REDIS_ADDR: ${FILE_SERVICE_REDIS_ADDR}
+      FILE_SERVICE_REDIS_PASSWORD: ${FILE_SERVICE_REDIS_PASSWORD}
+      FILE_SERVICE_REDIS_DB: ${FILE_SERVICE_REDIS_DB}
+      FILE_SERVICE_MQ_URL: ${FILE_SERVICE_MQ_URL}
+    ports:
+      - "18086:18086"
+
+  report-service:
+    build:
+      context: .
+      dockerfile: ./reportService/Dockerfile
+    container_name: sky-report-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    environment:
+      REPORT_SERVICE_MYSQL_DSN: ${REPORT_SERVICE_MYSQL_DSN}
+      REPORT_SERVICE_REDIS_ADDR: ${REPORT_SERVICE_REDIS_ADDR}
+      REPORT_SERVICE_REDIS_PASSWORD: ${REPORT_SERVICE_REDIS_PASSWORD}
+      REPORT_SERVICE_REDIS_DB: ${REPORT_SERVICE_REDIS_DB}
+      REPORT_SERVICE_MQ_URL: ${REPORT_SERVICE_MQ_URL}
+    ports:
+      - "18087:18087"
+
+  workspace-service:
+    build:
+      context: .
+      dockerfile: ./workspaceService/Dockerfile
+    container_name: sky-workspace-service
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    environment:
+      WORKSPACE_SERVICE_MYSQL_DSN: ${WORKSPACE_SERVICE_MYSQL_DSN}
+      WORKSPACE_SERVICE_REDIS_ADDR: ${WORKSPACE_SERVICE_REDIS_ADDR}
+      WORKSPACE_SERVICE_REDIS_PASSWORD: ${WORKSPACE_SERVICE_REDIS_PASSWORD}
+      WORKSPACE_SERVICE_REDIS_DB: ${WORKSPACE_SERVICE_REDIS_DB}
+      WORKSPACE_SERVICE_MQ_URL: ${WORKSPACE_SERVICE_MQ_URL}
+    ports:
+      - "18088:18088"
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:

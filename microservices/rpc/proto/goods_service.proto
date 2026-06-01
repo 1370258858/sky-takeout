@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package goods.v1;
+
+option go_package = "microservices/rpc/proto/goods/v1;goodsv1";
+
+service GoodsService {
+  rpc GetSku(GetSkuRequest) returns (GetSkuResponse);
+  rpc ListHotGoods(ListHotGoodsRequest) returns (ListHotGoodsResponse);
+}
+
+message GetSkuRequest {
+  int64 sku_id = 1;
+}
+
+message GetSkuResponse {
+  int64 sku_id = 1;
+  string name = 2;
+  int64 price_cent = 3;
+  bool available = 4;
+}
+
+message ListHotGoodsRequest {
+  int32 limit = 1;
+}
+
+message HotGoodsItem {
+  int64 sku_id = 1;
+  string name = 2;
+  int64 sold_count = 3;
+}
+
+message ListHotGoodsResponse {
+  repeated HotGoodsItem items = 1;
+}

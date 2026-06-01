@@ -1,0 +1,46 @@
+topics:
+  - name: order.created
+    producer: orderService
+    consumers:
+      - deliveryService
+      - reportService
+    payload:
+      orderId: int64
+      userId: int64
+      totalAmountCent: int64
+
+  - name: order.timeout
+    producer: orderService
+    consumers:
+      - orderService
+    payload:
+      orderId: int64
+      expireAtUnix: int64
+
+  - name: payment.status.changed
+    producer: paymentService
+    consumers:
+      - orderService
+      - reportService
+    payload:
+      orderId: int64
+      status: string
+      paidAtUnix: int64
+
+  - name: delivery.status.changed
+    producer: deliveryService
+    consumers:
+      - orderService
+      - workspaceService
+    payload:
+      orderId: int64
+      riderId: int64
+      status: string
+
+policies:
+  retry:
+    maxAttempts: 16
+    backoff: exponential
+  deadLetter:
+    enabled: true
+    suffix: .dlq

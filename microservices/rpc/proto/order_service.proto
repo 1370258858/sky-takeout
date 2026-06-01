@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package order.v1;
+
+option go_package = "microservices/rpc/proto/order/v1;orderv1";
+
+service OrderService {
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+}
+
+message OrderItem {
+  int64 sku_id = 1;
+  int32 quantity = 2;
+}
+
+message CreateOrderRequest {
+  int64 user_id = 1;
+  repeated OrderItem items = 2;
+  string address = 3;
+}
+
+message CreateOrderResponse {
+  int64 order_id = 1;
+  string status = 2;
+}
+
+message CancelOrderRequest {
+  int64 order_id = 1;
+  string reason = 2;
+}
+
+message CancelOrderResponse {
+  bool success = 1;
+}
