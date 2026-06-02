@@ -12,10 +12,13 @@ import (
 	"time"
 
 	"sky-takeout/microservices/gatewayService/common"
+	userpb "sky-takeout/microservices/gatewayService/rpc/pb"
 	"sky-takeout/microservices/gatewayService/common/retcode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type tokenExchangeRequest struct {
@@ -50,6 +53,9 @@ type EmployeeLogin struct {
 // 全局 JWT 密钥（真实项目必须放在配置/环境变量）
 var jwtSecret = []byte("your-gateway-jwt-secret")
 
+var userAuthClient userpb.GetwayServiceClient
+var userAuthConn *grpc.ClientConn
+
 func main() {
 	resources := common.MustInitForService()
 	defer func() {
@@ -57,6 +63,23 @@ func main() {
 			log.Printf("gatewayService close resources error: %v", err)
 		}
 	}()
+
+	userServiceAddr := os.Getenv("USER_SERVICE_ADDR")
+	if userServiceAddr == "" {
+		userServiceAddr = "user-service:19082"
+	}
+
+	conn, err := grpc.Dial(userServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("gatewayService connect userService error: %v", err)
+	}
+	userAuthConn = conn
+	defer func() {
+		if err := userAuthConn.Close(); err != nil {
+			log.Printf("gatewayService close user grpc conn error: %v", err)
+		}
+	}()
+	userAuthClient = userpb.NewGetwayServiceClient(userAuthConn)
 
 	// ========== 替换成 GIN ==========
 	r := gin.Default()

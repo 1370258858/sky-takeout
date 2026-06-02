@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -12,6 +11,8 @@ import (
 	"time"
 
 	"sky-takeout/microservices/fileService/common"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -22,20 +23,19 @@ func main() {
 		}
 	}()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
+	r := gin.Default()
+	r.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, map[string]any{
 			"service": "fileService",
 			"status":  "ok",
 		})
 	})
 
 	addr := ":18086"
-	server := &http.Server{Addr: addr, Handler: mux}
+	server := &http.Server{Addr: addr, Handler: r}
 
 	go func() {
-		log.Printf("fileService listening on %s", addr)
+		log.Printf("fileService listening on %s (gin mode)", addr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("fileService serve error: %v", err)
 		}
