@@ -29,6 +29,7 @@ type tokenExchangeRequest struct {
 type refreshRequest struct {
 	RefreshToken string `json:"refreshToken" binding:"required"`
 	Username     string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 type tokenPair struct {
@@ -102,6 +103,8 @@ func main() {
 	// 3) 代理路由
 	r.Any("/getway/*proxyPath", proxyHandler)
 
+	
+
 	// ========== 服务启动 ==========
 	addr := ":18080"
 	server := &http.Server{
@@ -126,6 +129,41 @@ func main() {
 		log.Printf("gatewayService shutdown error: %v", err)
 	}
 }
+
+
+
+// GenerateToken 生成Token uid 用户id subject 签发对象  secret 加盐
+func GenerateToken(Username string, subject string, secret string) (string, error) {
+	claim := CustomPayload{
+		Username:     Username,
+		GrantScope: subject,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "Auth_Server",                                   //签发者
+			Subject:   subject,                                         //签发对象
+			Audience:  jwt.ClaimStrings{"PC", "Wechat_Program"},        //签发受众
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),   //过期时间
+			NotBefore: jwt.NewNumericDate(time.Now().Add(time.Second)), //最早使用时间
+			IssuedAt:  jwt.NewNumericDate(time.Now()),                  //签发时间
+		},
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claim).SignedString([]byte(secret))
+	return token, err
+}
+
+func ParseToken(token string, secret string) (*CustomPayload, error) {
+	// 解析token
+	parseToken, err := jwt.ParseWithClaims(token, &CustomPayload{}, func(token *jwt.Token) (i interface{}, err error) {
+		return []byte(secret), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if claims, ok := parseToken.Claims.(*CustomPayload); ok && parseToken.Valid { // 校验token
+		return claims, nil
+	}
+	return nil, errors.New("invalid token")
+}
+
 
 // ======================
 // 兑换 Token 处理器
@@ -153,40 +191,16 @@ func tokenExchangeHandler(c *gin.Context) {
 		retcode.Fatal(c, errors.New(GetAuthRespon.GetMessage()), "认证失败: "+GetAuthRespon.GetMessage())
 		return
 	}
-
-	token, err := exchangeToken(c, req.Username)
+	jwttoken,err:=GenerateToken(req.Username,"user",req.Password)
 	if err != nil {
 		return
 	}
 
 	// 返回统一格式
 	retcode.OK(c, map[string]any{
-		"token":    token,
+		"token":    jwttoken,
 		"username": req.Username,
 	})
-}
-
-func exchangeToken(c *gin.Context, username string) (string, error) {
-	// 构造 JWT 载荷
-	claims := CustomPayload{
-		Username:   username,
-		GrantScope: "subject",
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "Auth_Server",
-			Subject:   "user",
-			Audience:  jwt.ClaimStrings{"PC", "Wechat_Program"},
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			NotBefore: jwt.NewNumericDate(time.Now()),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-
-	// 生成 Token（密钥不能用密码！）
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
-	if err != nil {
-		return "", err
-	}
-	return token, nil
 }
 
 // ======================
@@ -206,8 +220,7 @@ func tokenRefreshHandler(c *gin.Context) {
 		return
 	}
 
-	// TODO: 校验 refreshToken
-
+	// 校验 refreshToken
 	parseToken, err := jwt.ParseWithClaims(refreshToken, &CustomPayload{}, func(token *jwt.Token) (i interface{}, err error) {
 		return []byte(jwtSecret), nil
 	})
@@ -215,15 +228,23 @@ func tokenRefreshHandler(c *gin.Context) {
 		retcode.Fatal(c, err, "无效的 refreshToken")
 		return
 	}
+
 	//TOKEN 续期逻辑（这里直接返回示例数据，实际项目需要重新生成新的 AccessToken 和 RefreshToken）
-	token, err := exchangeToken(c, req.Username)
+	newToken,err:=GenerateToken(req.Username,"user",req.Password)
 	if err != nil {
+		retcode.Fatal(c, err, "续期失败refreshToken")
 		return
 	}
 	// 返回统一格式
+	newJWTToken,err:=ParseToken(newToken,req.Password)
+	if err != nil {
+		retcode.Fatal(c, err, "无效的 refreshToken")
+		return
+	}
 	retcode.OK(c, map[string]any{
-		"token":    token,
+		"token":    newToken,
 		"username": req.Username,
+		"expireDate":newJWTToken.ExpiresAt.Local().String(),
 	})
 
 }
