@@ -15,5 +15,6 @@ message GetAuthRequest {
 
 message GetAuthResponse {
   bool success = 1;
+  string message = 2;
 }
 

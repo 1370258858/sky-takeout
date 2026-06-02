@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"sky-takeout/microservices/gatewayService/common"
-	userpb "sky-takeout/microservices/gatewayService/rpc/pb"
 	"sky-takeout/microservices/gatewayService/common/retcode"
+	getwayv1 "sky-takeout/microservices/gatewayService/rpc/pb"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -28,6 +28,7 @@ type tokenExchangeRequest struct {
 
 type refreshRequest struct {
 	RefreshToken string `json:"refreshToken" binding:"required"`
+	Username     string `json:"username" binding:"required"`
 }
 
 type tokenPair struct {
@@ -53,7 +54,7 @@ type EmployeeLogin struct {
 // 全局 JWT 密钥（真实项目必须放在配置/环境变量）
 var jwtSecret = []byte("your-gateway-jwt-secret")
 
-var userAuthClient userpb.GetwayServiceClient
+var userAuthClient getwayv1.GetwayServiceClient
 var userAuthConn *grpc.ClientConn
 
 func main() {
@@ -79,7 +80,7 @@ func main() {
 			log.Printf("gatewayService close user grpc conn error: %v", err)
 		}
 	}()
-	userAuthClient = userpb.NewGetwayServiceClient(userAuthConn)
+	userAuthClient = getwayv1.NewGetwayServiceClient(userAuthConn)
 
 	// ========== 替换成 GIN ==========
 	r := gin.Default()
@@ -93,13 +94,13 @@ func main() {
 	})
 
 	// 1) 兑换 token
-	r.POST("/auth/token/exchange", tokenExchangeHandler)
+	r.POST("/getway/token/exchange", tokenExchangeHandler)
 
 	// 2) 刷新 token
-	r.POST("/auth/token/refresh", tokenRefreshHandler)
+	r.POST("/getway/token/refresh", tokenRefreshHandler)
 
 	// 3) 代理路由
-	r.Any("/proxy/*proxyPath", proxyHandler)
+	r.Any("/getway/*proxyPath", proxyHandler)
 
 	// ========== 服务启动 ==========
 	addr := ":18080"
@@ -133,16 +134,42 @@ func tokenExchangeHandler(c *gin.Context) {
 	var req tokenExchangeRequest
 	// Gin 自动绑定 JSON 参数
 	if err := c.ShouldBindJSON(&req); err != nil {
-		retcode.Fatal(c, err,"参数错误: "+err.Error())
+		retcode.Fatal(c, err, "参数错误: "+err.Error())
 		return
 	}
 
 	// TODO: 调用 RPC Auth 服务校验用户名密码
-	// 这里先模拟校验成功
+	GetAuthRequest := &getwayv1.GetAuthRequest{
+		UserName: req.Username,
+		Password: req.Password,
+	}
+	ctx := context.Background()
+	GetAuthRespon, err := userAuthClient.GetAuth(ctx, GetAuthRequest)
+	if err != nil {
+		retcode.Fatal(c, err, "RPC调用Auth服务失败: "+err.Error())
+		return
+	}
+	if GetAuthRespon.GetSuccess() == false {
+		retcode.Fatal(c, errors.New(GetAuthRespon.GetMessage()), "认证失败: "+GetAuthRespon.GetMessage())
+		return
+	}
 
+	token, err := exchangeToken(c, req.Username)
+	if err != nil {
+		return
+	}
+
+	// 返回统一格式
+	retcode.OK(c, map[string]any{
+		"token":    token,
+		"username": req.Username,
+	})
+}
+
+func exchangeToken(c *gin.Context, username string) (string, error) {
 	// 构造 JWT 载荷
 	claims := CustomPayload{
-		Username:   req.Username,
+		Username:   username,
 		GrantScope: "subject",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "Auth_Server",
@@ -157,15 +184,9 @@ func tokenExchangeHandler(c *gin.Context) {
 	// 生成 Token（密钥不能用密码！）
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
 	if err != nil {
-		retcode.Fatal(c, err, "生成Token失败")
-		return
+		return "", err
 	}
-
-	// 返回统一格式
-	retcode.OK(c, map[string]any{
-		"token":    token,
-		"username": req.Username,
-	})
+	return token, nil
 }
 
 // ======================
@@ -175,23 +196,36 @@ func tokenRefreshHandler(c *gin.Context) {
 	var req refreshRequest
 	var err error
 	if err := c.ShouldBindJSON(&req); err != nil {
-		retcode.Fatal(c, err,"参数错误: "+err.Error())
+		retcode.Fatal(c, err, "参数错误: "+err.Error())
 		return
 	}
 
 	refreshToken := strings.TrimSpace(req.RefreshToken)
 	if refreshToken == "" {
-		retcode.Fatal(c, err,"refreshToken 不能为空")
+		retcode.Fatal(c, err, "refreshToken 不能为空")
 		return
 	}
 
 	// TODO: 校验 refreshToken
-	// 这里返回示例
-	c.JSON(http.StatusOK, map[string]any{
-		"accessToken":          "demo-new-access-token",
-		"accessTokenExpiresIn": 15 * 60,
-		"issuedAt":             time.Now().Unix(),
+
+	parseToken, err := jwt.ParseWithClaims(refreshToken, &CustomPayload{}, func(token *jwt.Token) (i interface{}, err error) {
+		return []byte(jwtSecret), nil
 	})
+	if err != nil || !parseToken.Valid {
+		retcode.Fatal(c, err, "无效的 refreshToken")
+		return
+	}
+	//TOKEN 续期逻辑（这里直接返回示例数据，实际项目需要重新生成新的 AccessToken 和 RefreshToken）
+	token, err := exchangeToken(c, req.Username)
+	if err != nil {
+		return
+	}
+	// 返回统一格式
+	retcode.OK(c, map[string]any{
+		"token":    token,
+		"username": req.Username,
+	})
+
 }
 
 // ======================
