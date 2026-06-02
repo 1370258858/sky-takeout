@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package getway.v1;
+
+option go_package = "microservices/rpc/proto/getway/v1;getwayv1";
+
+service GetwayService {
+  rpc GetAuth(GetAuthRequest) returns (GetAuthResponse);
+}
+
+message GetAuthRequest {
+  string user_name = 1;
+  string password = 2;
+}
+
+message GetAuthResponse {
+  bool success = 1;
+}
+
