@@ -1,13 +1,18 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 
 FROM golang:1.26-alpine AS builder
 WORKDIR /src
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+	--mount=type=cache,target=/root/.cache/go-build \
+	go mod download
 
 COPY userService ./userService
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/app ./userService/cmd/user
+RUN --mount=type=cache,target=/go/pkg/mod \
+	--mount=type=cache,target=/root/.cache/go-build \
+	go build -trimpath -ldflags "-s -w" -o /out/app ./userService/cmd/user
 
 FROM alpine:3.20
 WORKDIR /app
@@ -15,5 +20,5 @@ RUN adduser -D -H -u 10001 appuser
 COPY --from=builder /out/app /app/app
 USER appuser
 
-EXPOSE 18082
+EXPOSE 18082 19082
 ENTRYPOINT ["/app/app"]

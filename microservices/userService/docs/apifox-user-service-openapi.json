@@ -1,0 +1,71 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Sky Takeout User Service API",
+    "version": "1.0.0",
+    "description": "OpenAPI generated from current userService gin routes."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:18082",
+      "description": "Local docker runtime"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health"
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health check",
+        "operationId": "userServiceHealthCheck",
+        "responses": {
+          "200": {
+            "description": "Service health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthzResponse"
+                },
+                "examples": {
+                  "ok": {
+                    "value": {
+                      "service": "userService",
+                      "status": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthzResponse": {
+        "type": "object",
+        "required": [
+          "service",
+          "status"
+        ],
+        "properties": {
+          "service": {
+            "type": "string",
+            "example": "userService"
+          },
+          "status": {
+            "type": "string",
+            "example": "ok"
+          }
+        }
+      }
+    }
+  }
+}

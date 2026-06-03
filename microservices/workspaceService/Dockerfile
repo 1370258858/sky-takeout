@@ -1,13 +1,18 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 
 FROM golang:1.26-alpine AS builder
 WORKDIR /src
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+	--mount=type=cache,target=/root/.cache/go-build \
+	go mod download
 
 COPY workspaceService ./workspaceService
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/app ./workspaceService/cmd/workspace
+RUN --mount=type=cache,target=/go/pkg/mod \
+	--mount=type=cache,target=/root/.cache/go-build \
+	go build -trimpath -ldflags "-s -w" -o /out/app ./workspaceService/cmd/workspace
 
 FROM alpine:3.20
 WORKDIR /app

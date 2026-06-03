@@ -47,12 +47,14 @@ services:
       - mysql
       - redis
       - rabbitmq
+      - user-service
     environment:
       GATEWAY_SERVICE_MYSQL_DSN: ${GATEWAY_SERVICE_MYSQL_DSN}
       GATEWAY_SERVICE_REDIS_ADDR: ${GATEWAY_SERVICE_REDIS_ADDR}
       GATEWAY_SERVICE_REDIS_PASSWORD: ${GATEWAY_SERVICE_REDIS_PASSWORD}
       GATEWAY_SERVICE_REDIS_DB: ${GATEWAY_SERVICE_REDIS_DB}
       GATEWAY_SERVICE_MQ_URL: ${GATEWAY_SERVICE_MQ_URL}
+      USER_SERVICE_ADDR: ${USER_SERVICE_ADDR:-user-service:19082}
     ports:
       - "18080:18080"
 
@@ -93,6 +95,7 @@ services:
       USER_SERVICE_MQ_URL: ${USER_SERVICE_MQ_URL}
     ports:
       - "18082:18082"
+      - "19082:19082"
 
   goods-service:
     build:

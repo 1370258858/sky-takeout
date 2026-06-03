@@ -1,0 +1,305 @@
+openapi: 3.0.3
+info:
+  title: Sky Takeout Gateway API
+  version: 1.0.0
+  description: |
+    Gateway Service API definitions generated from current gin routes.
+    This file can be imported directly into Apifox.
+servers:
+  - url: http://localhost:18080
+    description: Local docker runtime
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Proxy
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthzResponse'
+              examples:
+                ok:
+                  value:
+                    service: gatewayService
+                    status: ok
+
+  /getway/token/exchange:
+    post:
+      tags: [Auth]
+      summary: Exchange username/password for token
+      operationId: tokenExchange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenExchangeRequest'
+            examples:
+              default:
+                value:
+                  username: admin
+                  password: "123456"
+      responses:
+        '200':
+          description: Unified business response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedResponse'
+              examples:
+                success:
+                  value:
+                    code: 1
+                    msg: ok
+                    data:
+                      token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                      username: admin
+                invalidParams:
+                  value:
+                    code: 403
+                    msg: "参数错误: Key: 'tokenExchangeRequest.Username' Error:Field validation for 'Username' failed on the 'required' tag"
+                    data: null
+                authFailed:
+                  value:
+                    code: 403
+                    msg: "认证失败: 账号不存在"
+                    data: null
+
+  /getway/token/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh token (validate refreshToken first)
+      operationId: tokenRefresh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+            examples:
+              default:
+                value:
+                  refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  username: admin
+                  password: "123456"
+      responses:
+        '200':
+          description: Unified business response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedResponse'
+              examples:
+                success:
+                  value:
+                    code: 1
+                    msg: ok
+                    data:
+                      token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                      username: admin
+                      expireDate: "2026-06-03 15:04:05 +0800 CST"
+                invalidToken:
+                  value:
+                    code: 403
+                    msg: "无效的 refreshToken"
+                    data: null
+
+  /proxy/{proxyPath}:
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        description: |
+          Target downstream path segment captured by gin wildcard.
+          If it contains '/', pass URL encoded value in clients that enforce path param encoding.
+        schema:
+          type: string
+    get:
+      tags: [Proxy]
+      summary: Proxy placeholder (GET)
+      operationId: proxyGet
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyNotImplementedResponse'
+    post:
+      tags: [Proxy]
+      summary: Proxy placeholder (POST)
+      operationId: proxyPost
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyNotImplementedResponse'
+    put:
+      tags: [Proxy]
+      summary: Proxy placeholder (PUT)
+      operationId: proxyPut
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyNotImplementedResponse'
+    delete:
+      tags: [Proxy]
+      summary: Proxy placeholder (DELETE)
+      operationId: proxyDelete
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyNotImplementedResponse'
+    patch:
+      tags: [Proxy]
+      summary: Proxy placeholder (PATCH)
+      operationId: proxyPatch
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyNotImplementedResponse'
+    head:
+      tags: [Proxy]
+      summary: Proxy placeholder (HEAD)
+      operationId: proxyHead
+      responses:
+        '501':
+          description: Not implemented
+    options:
+      tags: [Proxy]
+      summary: Proxy placeholder (OPTIONS)
+      operationId: proxyOptions
+      responses:
+        '501':
+          description: Not implemented
+
+components:
+  schemas:
+    HealthzResponse:
+      type: object
+      required: [service, status]
+      properties:
+        service:
+          type: string
+          example: gatewayService
+        status:
+          type: string
+          example: ok
+
+    TokenExchangeRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: 123456
+
+    TokenRefreshRequest:
+      type: object
+      required: [refreshToken, username, password]
+      properties:
+        refreshToken:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: 123456
+
+    UnifiedResponse:
+      type: object
+      required: [code, msg, data]
+      properties:
+        code:
+          type: integer
+          description: Business code from common/e/code.go
+          example: 1
+        msg:
+          type: string
+          example: ok
+        data:
+          nullable: true
+          oneOf:
+            - $ref: '#/components/schemas/TokenExchangeData'
+            - $ref: '#/components/schemas/TokenRefreshData'
+            - type: object
+              additionalProperties: true
+
+    TokenExchangeData:
+      type: object
+      required: [token, username]
+      properties:
+        token:
+          type: string
+        username:
+          type: string
+
+    TokenRefreshData:
+      type: object
+      required: [token, username, expireDate]
+      properties:
+        token:
+          type: string
+        username:
+          type: string
+        expireDate:
+          type: string
+          description: Local time string generated by Go time formatting
+
+    ProxyNotImplementedResponse:
+      type: object
+      required: [message, path]
+      properties:
+        message:
+          type: string
+          example: proxy route placeholder
+        path:
+          type: string
+          example: /proxy/orders/list
