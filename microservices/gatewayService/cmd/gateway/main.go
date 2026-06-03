@@ -280,7 +280,7 @@ func tokenRefreshHandler(c *gin.Context) {
 			retcode.Fatal(c, errors.New("refreshToken 不存在或已过期"), "获取 refreshToken 失败")
 			return
 		}
-		retcode.Fatal(c, err, "获取 refreshToken 失败: "+err.Error())
+		retcode.Fatal(c, err, "refreshToken 不存在或已过期 ,获取 refreshToken 失败: "+err.Error())
 		return
 	}
 	if refreshTokenInRedis != req.RefreshToken {
