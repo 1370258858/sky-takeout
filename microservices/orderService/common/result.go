@@ -1,7 +1,7 @@
 package common
 
 import (
-	"sky-takeout/microservices/gatewayService/common/enum"
+	"sky-takeout/microservices/orderService/common/enum"
 
 	"gorm.io/gorm"
 )

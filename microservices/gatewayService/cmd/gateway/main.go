@@ -29,7 +29,7 @@ type tokenExchangeRequest struct {
 type refreshRequest struct {
 	RefreshToken string `json:"refreshToken" binding:"required"`
 	Username     string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Password     string `json:"password" binding:"required"`
 }
 
 type tokenPair struct {
@@ -101,9 +101,7 @@ func main() {
 	r.POST("/getway/token/refresh", tokenRefreshHandler)
 
 	// 3) 代理路由
-	r.Any("/getway/*proxyPath", proxyHandler)
-
-	
+	r.Any("/proxy/*proxyPath", proxyHandler)
 
 	// ========== 服务启动 ==========
 	addr := ":18080"
@@ -130,12 +128,10 @@ func main() {
 	}
 }
 
-
-
 // GenerateToken 生成Token uid 用户id subject 签发对象  secret 加盐
 func GenerateToken(Username string, subject string, secret string) (string, error) {
 	claim := CustomPayload{
-		Username:     Username,
+		Username:   Username,
 		GrantScope: subject,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "Auth_Server",                                   //签发者
@@ -164,7 +160,6 @@ func ParseToken(token string, secret string) (*CustomPayload, error) {
 	return nil, errors.New("invalid token")
 }
 
-
 // ======================
 // 兑换 Token 处理器
 // ======================
@@ -191,7 +186,7 @@ func tokenExchangeHandler(c *gin.Context) {
 		retcode.Fatal(c, errors.New(GetAuthRespon.GetMessage()), "认证失败: "+GetAuthRespon.GetMessage())
 		return
 	}
-	jwttoken,err:=GenerateToken(req.Username,"user",req.Password)
+	jwttoken, err := GenerateToken(req.Username, "user", req.Password)
 	if err != nil {
 		return
 	}
@@ -230,21 +225,21 @@ func tokenRefreshHandler(c *gin.Context) {
 	}
 
 	//TOKEN 续期逻辑（这里直接返回示例数据，实际项目需要重新生成新的 AccessToken 和 RefreshToken）
-	newToken,err:=GenerateToken(req.Username,"user",req.Password)
+	newToken, err := GenerateToken(req.Username, "user", req.Password)
 	if err != nil {
 		retcode.Fatal(c, err, "续期失败refreshToken")
 		return
 	}
 	// 返回统一格式
-	newJWTToken,err:=ParseToken(newToken,req.Password)
+	newJWTToken, err := ParseToken(newToken, req.Password)
 	if err != nil {
 		retcode.Fatal(c, err, "无效的 refreshToken")
 		return
 	}
 	retcode.OK(c, map[string]any{
-		"token":    newToken,
-		"username": req.Username,
-		"expireDate":newJWTToken.ExpiresAt.Local().String(),
+		"token":      newToken,
+		"username":   req.Username,
+		"expireDate": newJWTToken.ExpiresAt.Local().String(),
 	})
 
 }

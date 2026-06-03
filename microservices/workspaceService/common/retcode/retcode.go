@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sky-takeout/microservices/gatewayService/common/e"
+	"sky-takeout/microservices/workspaceService/common/e"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
