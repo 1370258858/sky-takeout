@@ -5,8 +5,11 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -28,10 +31,7 @@ type tokenExchangeRequest struct {
 }
 
 type refreshRequest struct {
-	AccessToken  string `json:"accessToken" binding:"required"`
-	RefreshToken string `json:"refreshToken" binding:"required"`
-	Username     string `json:"username" binding:"required"`
-	Password     string `json:"password" binding:"required"`
+	Username string `json:"username" binding:"required"`
 }
 
 type refreshResponse struct {
@@ -62,6 +62,7 @@ var userAuthClient getwayv1.GetwayServiceClient
 var userAuthConn *grpc.ClientConn
 var rd *redis.Client
 var gatewayResources *common.Resources
+var useDockerServiceDNS bool
 
 // RD returns the initialized redis client for gateway features.
 func RD() *redis.Client {
@@ -86,8 +87,9 @@ func main() {
 
 	userServiceAddr := os.Getenv("USER_SERVICE_ADDR")
 	if userServiceAddr == "" {
-		userServiceAddr = "user-service:19082"
+		userServiceAddr = "127.0.0.1:19082"
 	}
+	useDockerServiceDNS = strings.Contains(userServiceAddr, "user-service:")
 
 	conn, err := grpc.Dial(userServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -102,6 +104,8 @@ func main() {
 	userAuthClient = getwayv1.NewGetwayServiceClient(userAuthConn)
 
 	// ========== 替换成 GIN ==========
+	gin.SetMode(gin.DebugMode)
+	log.Printf("gatewayService gin mode: %s", gin.Mode())
 	r := gin.Default()
 
 	// 健康检查
@@ -120,8 +124,8 @@ func main() {
 
 	// 3) 强制下线
 	r.POST("/getway/token/revoke", tokenRevokeHandler)
-	// 3) 代理路由
-	r.Any("/proxy/*proxyPath", proxyHandler)
+	// 4) 代理转发，鉴权
+	r.Any("/proxy/:isAuth/:service/*proxyPath", proxyNoAuthHandler)
 
 	// ========== 服务启动 ==========
 	addr := ":18080"
@@ -231,6 +235,7 @@ func tokenExchangeHandler(c *gin.Context) {
 	}
 
 	//"refreshToken"+req.Username  作为key，refreshToken 作为value，过期时间设置为15分钟
+	//现有逻辑是每次兑换token都会生成新的 refreshToken，并覆盖旧的 refreshToken，实际项目可能需要更复杂的 refreshToken 管理逻辑，比如允许多个 refreshToken 共存，或者在刷新时生成新的 refreshToken 等。
 	rdRes := RD().Set(c, "refreshToken-"+req.Username, refreshToken, 15*time.Minute)
 	if rdRes.Err() != nil {
 		log.Printf("gatewayService set refresh token to redis error: %v", rdRes.Err())
@@ -244,6 +249,21 @@ func tokenExchangeHandler(c *gin.Context) {
 	// 返回统一格式
 	retcode.OK(c, tokenResponse)
 }
+func isAuthSuccess(ctx *gin.Context, accessTokenString string) (bool, *jwt.Token, error) {
+
+	// 校验 accessToken
+	accessToken, err := ParseToken(accessTokenString, jwtSecret)
+	if err != nil {
+		retcode.Fatal(ctx, err, "accessToken 无效: "+err.Error())
+		return false, nil, err
+	}
+	// 这里我们允许过期的 accessToken 进行刷新，所以不检查accessToken.Valid
+	if accessToken == nil || !accessToken.Valid {
+		retcode.Fatal(ctx, err, "accessToken 无效")
+		return false, nil, errors.New("accessToken 无效")
+	}
+	return true, accessToken, nil
+}
 
 // ======================
 // 刷新 Token 处理器
@@ -251,39 +271,32 @@ func tokenExchangeHandler(c *gin.Context) {
 // ======================
 func tokenRefreshHandler(c *gin.Context) {
 	var req refreshRequest
-	var err error
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		retcode.Fatal(c, err, "参数错误: "+err.Error())
 		return
 	}
 
-	accessTokenString := strings.TrimSpace(req.AccessToken)
+	accessTokenString := c.GetHeader("Authorization-AccessToken")
 	if accessTokenString == "" {
-		retcode.Fatal(c, err, "accessToken 不能为空")
+		retcode.Fatal(c, errors.New("accessToken 不能为空"), "accessToken 不能为空")
+		return
+	}
+	ok, accessToken, err := isAuthSuccess(c, accessTokenString)
+	if err != nil || !ok {
 		return
 	}
 
-	// 校验 accessToken
-	accessToken, err := ParseToken(accessTokenString, jwtSecret)
-	if err != nil {
-		retcode.Fatal(c, err, "accessToken 无效: "+err.Error())
-		return
-	}
-	// 这里我们允许过期的 accessToken 进行刷新，所以不检查accessToken.Valid
-	if accessToken == nil || !accessToken.Valid {
-		retcode.Fatal(c, err, "accessToken 无效")
-		return
-	}
 	refreshTokenInRedis, err := RD().Get(c, "refreshToken-"+req.Username).Result()
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			retcode.Fatal(c, errors.New("refreshToken 不存在或已过期"), "获取 refreshToken 失败")
-			return
-		}
-		retcode.Fatal(c, err, "refreshToken 不存在或已过期 ,获取 refreshToken 失败: "+err.Error())
+		retcode.Fatal(c, err, "获取 refreshToken 失败: "+err.Error())
 		return
 	}
-	if refreshTokenInRedis != req.RefreshToken {
+	if errors.Is(err, redis.Nil) {
+		retcode.Fatal(c, errors.New("refreshToken 不存在或已过期"), "获取 refreshToken 失败")
+		return
+	}
+	if refreshTokenInRedis != c.GetHeader("Authorization-RefreshToken") {
 		retcode.Fatal(c, errors.New("refreshToken 与服务器记录不一致"), "refreshToken 无效")
 		return
 	}
@@ -314,7 +327,7 @@ func tokenRefreshHandler(c *gin.Context) {
 	var refreshResponse = refreshResponse{
 		AccessToken:            newAccessToken,
 		AccessTokenexpireDate:  time.Local().String(),
-		RefreshToken:           req.RefreshToken, // 刷新 token 续期逻辑（这里直接返回旧的 refreshToken，实际项目需要重新生成新的 RefreshToken）
+		RefreshToken:           c.GetHeader("Authorization-RefreshToken"), // 刷新 token 续期逻辑（这里直接返回旧的 refreshToken，实际项目需要重新生成新的 RefreshToken）
 		RefreshTokenexpireDate: "暂时不展示",
 		Username:               req.Username,
 	}
@@ -333,7 +346,8 @@ func tokenRevokeHandler(c *gin.Context) {
 		retcode.Fatal(c, errors.New("username 不能为空"), "username 不能为空")
 		return
 	}
-	parseToken, err := ParseToken(req.AccessToken, jwtSecret)
+
+	parseToken, err := ParseToken(c.GetHeader("Authorization-AccessToken"), jwtSecret)
 	if err != nil || parseToken == nil || !parseToken.Valid {
 		retcode.Fatal(c, err, "accessToken 无效: "+err.Error())
 		return
@@ -352,9 +366,57 @@ func tokenRevokeHandler(c *gin.Context) {
 // ======================
 // 代理处理器
 // ======================
-func proxyHandler(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, map[string]any{
-		"message": "proxy route placeholder",
-		"path":    c.Request.URL.Path,
-	})
+func proxyNoAuthHandler(c *gin.Context) {
+	service := c.Param("service")
+	isAuth := c.Param("isAuth")
+	isAuthBool, _ := strconv.ParseBool(isAuth)
+
+	if isAuthBool {
+		isAuthSuccess(c, c.GetHeader("Authorization-AccessToken"))
+	}
+
+	proxyPath := c.Param("proxyPath")
+	if service == "" {
+		retcode.Fatal(c, errors.New("service 不能为空"), "service 不能为空")
+		return
+	}
+	var targetHost string
+	switch service {
+	case "admin-service":
+		targetHost = proxyTarget("admin-service", 18081)
+	case "user-service":
+		targetHost = proxyTarget("user-service", 18082)
+	case "goods-service":
+		targetHost = proxyTarget("goods-service", 18083)
+	case "order-service":
+		targetHost = proxyTarget("order-service", 18084)
+	case "delivery-service":
+		targetHost = proxyTarget("delivery-service", 18085)
+	case "payment-service":
+		targetHost = proxyTarget("payment-service", 18086)
+	case "report-service":
+		targetHost = proxyTarget("report-service", 18087)
+	case "file-service":
+		targetHost = proxyTarget("file-service", 18088)
+	case "worker-service":
+		targetHost = proxyTarget("worker-service", 18089)
+	default:
+		retcode.Fatal(c, errors.New("未知的服务: "+service), "未知的服务: "+service)
+		return
+	}
+	target, _ := url.Parse(targetHost)
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	c.Request.URL.Path = proxyPath
+
+	proxy.ServeHTTP(c.Writer, c.Request)
+
+}
+
+func proxyTarget(service string, port int) string {
+	if useDockerServiceDNS {
+		return "http://" + service + ":" + strconv.Itoa(port)
+	}
+	return "http://127.0.0.1:" + strconv.Itoa(port)
 }
