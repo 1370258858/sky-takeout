@@ -71,6 +71,11 @@ func LoadConfigFromEnv(prefix string) Config {
 		MQURL:         pickEnv(prefix+"_MQ_URL", "MQ_URL"),
 	}
 
+	if cfg.MySQLDSN == "" {
+		// Local debug default: connect to docker-mapped mysql port on host.
+		cfg.MySQLDSN = "sky:sky@tcp(127.0.0.1:3306)/sky_takeout?charset=utf8mb4&parseTime=True&loc=Local"
+	}
+
 	if cfg.RedisAddr == "" {
 		cfg.RedisAddr = "127.0.0.1:6379"
 	}
