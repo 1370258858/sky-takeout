@@ -372,7 +372,10 @@ func proxyNoAuthHandler(c *gin.Context) {
 	isAuthBool, _ := strconv.ParseBool(isAuth)
 
 	if isAuthBool {
-		isAuthSuccess(c, c.GetHeader("Authorization-AccessToken"))
+		if ok, _, _ := isAuthSuccess(c, c.GetHeader("Authorization-AccessToken")); !ok {
+			retcode.Fatal(c, errors.New("鉴权失败"), "鉴权失败")
+			return
+		}
 	}
 
 	proxyPath := c.Param("proxyPath")
